@@ -1,0 +1,76 @@
+0 启动Application ：开启缓存、扫描接口、多数据源设置、声明控制类（登录页面、404、500不拦截）
+
+1 web访问全局配置WebXmlConfig：
+    静态资源访问++地址请求拦截器(登录拦截+限流拦截)++
+    权限监听器AuthorityListener-→权限管理业务层OperationService--初始化所有用户权限-→DaoSupport操作层-→根据包字段对应xml进行查询保存更新++
+    非法字符过滤器XssFilter++
+    访问druid地址参数设置++过滤druid静态资源
+
+2 拦截器Interceptor
+登录信息验证LoginRequestInterceptor--preHandle--校验权限-→dataCache--缓存调用和类型处理-→DaoSupport操作层... ++
+恶意请求拦截MaliciousRequestInterceptor--ip、时间、次数拦截
+
+3 控制器
+BaseController:基础和异常处理
+LogController:
+    "日志管理"页面-→LogAspect--ParamData(重写HashMap封装请求参数)-→Service层(异常日志,用AfterThrowing异常拦截)+Controller层(操作日志)-→
+VerifyController："/getVcode"-→创建流-→绘图--随机-→设置session码-→图传入流-→
+LoginController:
+    "登录"按钮--"login"-→LoginService.login--验证码获取(验证码生成并设置：VerifyController)-→成功：Session设置(Identity)--DataCache设置--返回null
+    --主界面main-→return "common/main";
+    --退出请求logout-→loginService.logout-→（移除dataCache和Cookie的id）
+UserController:
+    "用户管理"页面-→RoleService角色管理-→调用的泛型AbstratService<AuthRole>通用接口方法queryAll-→
+    --用户管理的列表查询(分页查询)-→UserService用户管理-→queryList-→AuthUserMapper.xml
+    --"添加用户"页面-→RoleService-→AbstratService<AuthRole>通用接口方法queryAll-→提供前端调用(只调用角色权限)
+    --"添加"按钮用户-→UserService-→判断+AbstratService.save()-→更新当前用户界面updatePage/{id}-→
+    --"重置密码"用户-→userService.updatePwd-→判断+更新表单+移除缓存和Cookie和缓存-→返回操作结果-→
+    --"修改"用户--"删除"用户
+OperationController：
+    "操作(权限)管理"页面--查询权限列表-→opService.queryPage(page, oper);分页查询
+RoleController：
+    "角色管理"页面--"auth/role/main"
+    --角色列表查询(分页查询)
+    --"添加角色"页面(按钮)--"添加"角色(确认)-→roleService.saveRole(role)-→AbstratService.save()
+    --更新页面（当前角色）-→roleService.queryByID-→AbstratService-→mapper.selectByPrimaryKey(key);
+    --修改角色--删除角色-→
+    --"分配用户"(角色用户管理)页面-→查询角色和用户匹配的用户+返回所有用户-→
+      "分配用户"（角色绑定用户）提交-→userService.bindUser-→dao.batchUpdate-→更新user内的字段roleid(角色权限id)
+    --"分配权限"(角色权限管理页面)页面-→-→RoleService--queryNotAdmin-→MyBatis的逆向工程查询非admin字段的权限-→查询拥有的权限-→设置map返回页面
+      "已有权限"和搜索-→搜索权限码-→排序-→map添加-→返回页面-→-→ "解除权限"按钮
+      "未有权限"和搜索--"绑定权限"按钮
+TechController：（文件管理和文章管理）
+    "文件管理"页面tech/file--TechService分页查询文件列表-→-→-→-→-→
+    --"添加文件"页面 tech/file_add--"添加文件"按钮techService.addFile--更新文件"tech/file_update"
+    --修改文件techService.updateFile--删除文件techService.delFile
+    "文章管理"页面与"文件管理"差不多
+UploadController：
+    上传图片-→uploadUtil.upload-→new AjaxResult返回信息的封装
+    上传文件-→判断+上传+返回-→-→
+    百度编辑器加载配置表/上传图片
+Redis：
+    RedisConfiguration--@Configuration配置：缓存管理+设置键值对序列化
+    RedisFacade--redis操作类-→设置缓存-→获取缓存的值-→获取缓存的实体
+    RedisObjectSerializer--redis序列化与反序列化
+
+前端：
+    提交是对应的class="id"...类似$("#div").attr("src", "${ctx}/getVcode?random=" + Math.random());
+MVC交互：
+    model  接下来可用
+    modelandview  封装了界面和model  界面：welcome.jsp
+    return new ModelAndView("welcome","today",new Date());
+
+    model.put("courtName",courtName);
+    model.put("reservations",reservationService.query(courtName));
+    return new ModelAndView("reservationQuery",model);//return "reservationQuery";
+
+    ModelMap：特殊的model
+    map.put("users", users);可以当做ModelMap
+数据库调用：
+    Dao层接口与xml一致 如果不在Dao层的包 启动类设置@MapperScan(basePackages = "com.xe.demo.mapper")
+    且application.propertis中设置mybatis.mapper-locations=classpath:mapper/*.xml等
+    接口实现userMapper.queryByUsername() queryByUsername为xml的id
+    xml返回规则：先用resultMap对结果集处理 id对应赋值 若没有则舍弃
+
+    fileMapper.insert(file);自动化也需要映射返回<resultMap id="BaseResultMap" type="com.xe.demo.model.IFile">
+
